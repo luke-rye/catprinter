@@ -119,38 +119,6 @@ function initLoggerUI() {
         logger.clear();
         logger.info('Log cleared');
     });
-    
-    // Add initial log entries
-    logger.info('Printer Tool initialized');
-    logger.info('Printer configuration', {
-        printerWidth: 384,
-        printerWidthBytes: 48,
-        minDataBytes: 4320
-    });
-    
-    // Log detailed protocol information
-    logger.data('Printer Protocol', `MXW01 Thermal Printer Protocol Summary:
-
-1. Connect via Bluetooth LE to service UUID: 0000ae30-0000-1000-8000-00805f9b34fb
-2. Communication happens through three characteristics:
-   - Control write: 0000ae01-0000-1000-8000-00805f9b34fb
-   - Notification: 0000ae02-0000-1000-8000-00805f9b34fb
-   - Data write: 0000ae03-0000-1000-8000-00805f9b34fb
-
-3. Command format: 0x22 0x21 [CMD] 0x00 [LEN_L] [LEN_H] [PAYLOAD...] [CRC8] 0xFF
-4. Print process:
-   a. Set intensity (0xA2)
-   b. Request status (0xA1)
-   c. Send print request (0xA9)
-   d. Transfer data in chunks
-   e. Flush data (0xAD)
-   f. Wait for print complete notification (0xAA)
-
-5. Image encoding:
-   - 1-bit monochrome (black/white)
-   - 384 pixels wide (48 bytes)
-   - Rows are sent sequentially
-   - Image is rotated 180° before sending`);
 }
 
 // Setup mode toggle functionality
@@ -178,9 +146,6 @@ function setActiveMode(mode) {
     // Update content visibility
     receiptModeContent.classList.toggle('active', mode === 'receipt');
     imageModeContent.classList.toggle('active', mode === 'image');
-    
-    // Log mode change
-    logger.info(`Switched to ${mode} mode`);
     
     // Update UI specific to the mode
     if (mode === 'receipt') {
@@ -417,6 +382,13 @@ function updateImageSummary() {
         return;
     }
     
+    // Only show threshold for dither methods that use it
+    const usesThreshold = ['threshold', 'floydSteinberg', 'atkinson', 'halftone'].includes(summary.ditherMethod);
+    const thresholdRow = usesThreshold ? `
+        <div class="summary-row">
+            <span>Threshold:</span> <span>${summary.threshold}</span>
+        </div>` : '';
+    
     imageSummary.innerHTML = `
     <div class="summary-section">
         <div class="summary-row">
@@ -432,10 +404,7 @@ function updateImageSummary() {
     <div class="summary-section">
         <div class="summary-row">
             <span>Dithering:</span> <span>${summary.ditherMethod}</span>
-        </div>
-        <div class="summary-row">
-            <span>Threshold:</span> <span>${summary.threshold}</span>
-        </div>
+        </div>${thresholdRow}
         <div class="summary-row">
             <span>Inverted:</span> <span>${summary.invert ? 'Yes' : 'No'}</span>
         </div>
