@@ -11,13 +11,11 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://catprinter.vercel.app/">
     <meta property="og:title" content="catprinter">
     <meta property="og:description" content="Webapp for the MXW01 model of thermal printer.">
     
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://catprinter.vercel.app/">
     <meta property="twitter:title" content="catprinter">
     <meta property="twitter:description" content="Webapp for the MXW01 model of thermal printer.">
     
@@ -45,132 +43,33 @@
     <main>
         <div class="panels">
             <!-- Receipt Mode Content -->
-            <div id="receiptModeContent" class="mode-content active">
-                <!-- Left Panel: Configuration -->
-                <section class="config-panel">
-                    <div class="config-section">
-                        <h3>Business Information</h3>
-                        <div class="input-group">
-                            <label for="businessName">Name</label>
-                            <input type="text" id="businessName" value="MY RESTAURANT">
-                        </div>
-                        <div class="input-group">
-                            <label for="businessAddress">Address</label>
-                            <textarea id="businessAddress" rows="2">123 MAIN STREET
-CITY, STATE 12345</textarea>
-                        </div>
-                        <div class="input-group">
-                            <label for="businessPhone">Phone</label>
-                            <input type="text" id="businessPhone" value="(555) 123-4567">
-                        </div>
-                    </div>
-                    
-                    <div class="config-section">
-                        <h3>Transaction</h3>
-                        <div class="flex-row">
-                            <div class="input-group">
-                                <label for="tableNumber">Table</label>
-                                <input type="text" id="tableNumber" value="12">
-                            </div>
-                            <div class="input-group">
-                                <label for="serverName">Server</label>
-                                <input type="text" id="serverName" value="ALICE">
-                            </div>
-                            <div class="input-group">
-                                <label for="transactionNumber">#</label>
-                                <input type="text" id="transactionNumber" value="1234">
-                            </div>
-                        </div>
-                        <div class="flex-row">
-                            <div class="input-group">
-                                <label for="taxRate">Tax %</label>
-                                <input type="number" id="taxRate" value="8.25" step="0.01">
-                            </div>
-                            <div class="input-group">
-                                <label>Date/Time</label>
-                                <div class="read-only-field" id="dateTimeField"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="config-section">
-                        <h3>Items</h3>
-                        <div id="itemsList"></div>
-                        
-                        <div class="item-entry">
-                            <div class="flex-row">
-                                <div class="input-group">
-                                    <input type="text" id="newItemName" placeholder="Item name">
-                                </div>
-                                <div class="input-group input-group-small">
-                                    <input type="number" id="newItemPrice" placeholder="0.00" step="0.01">
-                                </div>
-                                <button id="addItemBtn" class="btn-primary">Add</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="config-section">
-                        <h3>Payment</h3>
-                        <div class="flex-row">
-                            <div class="input-group">
-                                <label for="tipAmount">Tip</label>
-                                <input type="number" id="tipAmount" value="0.00" step="0.01">
-                            </div>
-                            <div class="input-group">
-                                <label for="paymentMethod">Method</label>
-                                <select id="paymentMethod">
-                                    <option value="CASH">Cash</option>
-                                    <option value="CREDIT" selected>Credit Card</option>
-                                    <option value="DEBIT">Debit</option>
-                                    <option value="MOBILE">Mobile Pay</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="flex-row">
-                            <div class="input-group">
-                                <label for="amountPaid">Paid</label>
-                                <input type="number" id="amountPaid" value="0.00" step="0.01">
-                            </div>
-                            <div class="input-group">
-                                <label>Change</label>
-                                <div class="read-only-field" id="changeAmount">$0.00</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="config-section">
-                        <h3>Footer</h3>
-                        <div class="input-group">
-                            <textarea id="footerMessage" rows="3">THANK YOU FOR DINING WITH US
-PLEASE COME AGAIN
-WWW.MYRESTAURANT.COM</textarea>
-                        </div>
-                    </div>
-                    
-                    <div class="action-buttons">
-                        <button id="resetBtn" class="btn-secondary">Reset</button>
-                        <button id="connectReceiptBtn" class="btn btn-primary connect-btn">Connect Printer</button>
-                        <button id="printReceiptBtn" class="btn-primary" disabled>Print</button>
-                    </div>
-                </section>
+            <div id="receiptModeContent" class="mode-content active"> 
+                <section class="config-panel"> <div class="config-section">
+                     <h3>Plain Text Printing</h3> 
+                     <div class="input-group">
+                         <label for="plainTextToPrint">Enter your text</label>
+                          <textarea id="plainTextToPrint" rows="10" placeholder="Type your message here. Text will be wrapped and converted to a bitmap.">
 
-                <!-- Right Panel: Receipt Preview -->
-                <section class="preview-panel">
-                    <div class="preview-header">
-                        <h2>Print Preview</h2>
-                    </div>
-                    
-                    <div class="receipt-wrapper">
-                        <div class="receipt-container" id="receiptContainer">
-                            <div class="receipt" id="receiptPreview">
-                                <!-- Receipt will be rendered here -->
-                            </div>
+                          </textarea>
+                         </div>
+                         </div> 
+                         <div class="action-buttons">
+                             <button id="connectReceiptBtn" class="btn btn-primary connect-btn">Connect Printer</button>
+                              <button id="printReceiptBtn" class="btn-primary" disabled>Print Text</button>
                         </div>
-                        <div class="receipt-summary" id="receiptSummary">
-                            <!-- Summary info will be placed here -->
-                        </div>
-                    </div>
+                             </section>
+                              <section class="preview-panel">
+                                 <div class="preview-header"> 
+                                    <h2>Text Preview (Bitmap)</h2>
+                                 </div> <div class="receipt-wrapper"> 
+                                    <div class="receipt-container" id="textPreviewContainer">
+                                         <canvas id="textPreviewCanvas" width="384" height="400" style="border: 1px solid #ccc;">
+                                    </canvas>
+                                     <div class="receipt-summary" id="textSummary">
+
+                                     </div>
+                                     </div>
+                         </div>
                 </section>
             </div>
             

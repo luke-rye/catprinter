@@ -902,3 +902,68 @@ footer a:hover {
 .btn-icon:hover {
   background-color: #fff5f5;
 }
+
+/* ========================================================================= */
+/* === NEW STYLES FOR TEXT PRINTING MODE (REPLACING RECEIPT FORM) === */
+/* ========================================================================= */
+
+/* 1. Style the New Text Input */
+#receiptModeContent #plainTextToPrint {
+    /* Make the text area fill the input space and give it height */
+    width: 100%;
+    min-height: 250px; 
+    padding: 0.4rem;
+    box-sizing: border-box; 
+    /* Use monospace for predictable text-to-canvas rendering */
+    font-family: 'Consolas', 'Monaco', monospace; 
+    font-size: 0.85rem;
+    line-height: 1.25;
+    resize: vertical; /* Allow vertical resizing only */
+}
+
+/* Ensure the label is properly visible */
+#receiptModeContent .config-section label[for="plainTextToPrint"] {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* 2. Style the Canvas Element */
+#textPreviewCanvas {
+    display: block;
+    width: 384px;   /* FIXED width matching PRINTER_WIDTH */
+    margin: 10px auto; 
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    
+    /* Crucial for making the bitmap dots sharp */
+    image-rendering: pixelated; 
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+
+/* 3. Style the Summary and Preview Containers (Override old receipt styles) */
+#textSummary {
+    padding: 0.5rem 0;
+    margin-top: 10px;
+    border-top: 1px solid #ddd;
+    background-color: transparent;
+    border: none;
+}
+
+/* Clear the default receipt style on the canvas parent (was receiptPreview) */
+#receiptPreview {
+    font-family: inherit;
+    background-color: transparent;
+    padding: 0;
+    font-size: 1rem;
+    line-height: 1;
+    white-space: normal;
+    width: 100%;
+    border: none;
+    height: auto;
+    max-height: none;
+}
+
+.receipt-wrapper {
+    overflow: hidden;
+}

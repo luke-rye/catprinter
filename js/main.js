@@ -1,5 +1,6 @@
 import { connectPrinter, printImage, getBatteryLevel, isPrinterConnected, getLastKnownBatteryLevel } from './printer.js';
-import { renderReceipt, updateReceiptPreview } from './receiptRenderer.js';
+// The original receiptRenderer is no longer used, but we keep the import reference if needed elsewhere.
+// import { renderReceipt, updateReceiptPreview } from './receiptRenderer.js'; 
 import { logger, setupLoggerUI } from './logger.js';
 import * as imageProcessor from './imageProcessor.js';
 
@@ -15,39 +16,16 @@ const batteryIndicator = document.getElementById('batteryIndicator');
 const batteryLevel = document.getElementById('batteryLevel');
 const batteryIcon = document.querySelector('.battery-icon');
 
-// Receipt Mode Elements
-// Business info
-const businessNameInput = document.getElementById('businessName');
-const businessAddressInput = document.getElementById('businessAddress');
-const businessPhoneInput = document.getElementById('businessPhone');
-// Transaction info
-const tableNumberInput = document.getElementById('tableNumber');
-const serverNameInput = document.getElementById('serverName');
-const transactionNumberInput = document.getElementById('transactionNumber');
-const taxRateInput = document.getElementById('taxRate');
-const dateTimeField = document.getElementById('dateTimeField');
-// Items
-const itemsListContainer = document.getElementById('itemsList');
-const newItemNameInput = document.getElementById('newItemName');
-const newItemPriceInput = document.getElementById('newItemPrice');
-const addItemBtn = document.getElementById('addItemBtn');
-// Payment
-const tipAmountInput = document.getElementById('tipAmount');
-const paymentMethodSelect = document.getElementById('paymentMethod');
-const amountPaidInput = document.getElementById('amountPaid');
-const changeAmountDisplay = document.getElementById('changeAmount');
-// Footer
-const footerMessageInput = document.getElementById('footerMessage');
+// Text Mode Elements (Replaces Receipt Mode)
+const plainTextToPrintInput = document.getElementById('plainTextToPrint');
+const textPreviewCanvas = document.getElementById('textPreviewCanvas');
+const textSummary = document.getElementById('textSummary');
+
 // Buttons
 const connectReceiptBtn = document.getElementById('connectReceiptBtn');
 const printReceiptBtn = document.getElementById('printReceiptBtn');
-const resetBtn = document.getElementById('resetBtn');
-// Receipt preview
-const receiptPreview = document.getElementById('receiptPreview');
-const receiptContainer = document.getElementById('receiptContainer');
-const receiptSummary = document.getElementById('receiptSummary');
 
-// Image Mode Elements
+// Image Mode Elements (Kept as is)
 const imageUploadInput = document.getElementById('imageUpload');
 const ditherMethodSelect = document.getElementById('ditherMethod');
 const thresholdValueInput = document.getElementById('thresholdValue');
@@ -72,26 +50,142 @@ const clearLogBtn = document.getElementById('clearLogBtn');
 const printProgressBar = document.getElementById('printProgressBar');
 
 // === Data Store ===
-let items = [];
-let currentDateTime = new Date().toLocaleString();
-let currentMode = 'receipt'; // 'receipt' or 'image'
+let currentMode = 'receipt'; // 'receipt' is now 'text' mode
 
 // === Battery Level Timer ===
 let batteryCheckIntervalId = null;
 const BATTERY_CHECK_INTERVAL = 30000; // 30 seconds
 
+// === Text to Canvas Logic ===
+
+/**
+ * Renders plain text onto the canvas element for the text preview.
+ * @param {string} text - The text to render, supporting \n for new lines.
+ * @param {number} printerWidth - The fixed width of the printer (384px).
+ */
+function renderTextToCanvas(text, printerWidth = 384) {
+    const canvas = textPreviewCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Printer is 384px wide
+    const padding = 10;
+    const fontSize = 24; 
+    const font = `${fontSize}px monospace`; 
+    const lineHeight = fontSize * 1.3;
+    const maxWidth = printerWidth - padding * 2;
+    
+    ctx.font = font;
+    
+    const rawLines = text.split('\n');
+    let wrappedLines = [];
+
+    // Simple word wrapping logic
+    for (const rawLine of rawLines) {
+        let currentLine = '';
+        const words = rawLine.split(' ');
+
+        for (let i = 0; i < words.length; i++) {
+            const testLine = currentLine + words[i] + ' ';
+            const testWidth = ctx.measureText(testLine).width;
+
+            // If line exceeds width (and it's not the first word of the line), wrap it
+            if (testWidth > maxWidth && i > 0) {
+                wrappedLines.push(currentLine.trim());
+                currentLine = words[i] + ' ';
+            } else {
+                currentLine = testLine;
+            }
+        }
+        wrappedLines.push(currentLine.trim());
+    }
+
+    // Set Final Canvas Dimensions and Draw
+    canvas.width = printerWidth;
+    canvas.height = (wrappedLines.length * lineHeight) + padding * 2;
+    
+    // Fill background with WHITE (crucial for correct thermal printing)
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw the Black Text
+    ctx.fillStyle = 'black';
+    ctx.font = font;
+    ctx.textBaseline = 'top';
+
+    wrappedLines.forEach((line, index) => {
+        const y = padding + (index * lineHeight);
+        ctx.fillText(line, padding, y);
+    });
+    
+    // Update the summary panel
+    if (textSummary) {
+        textSummary.innerHTML = `
+            <div class="summary-section">
+                <div class="summary-row">
+                    <span>Total Lines:</span> <span>${wrappedLines.length}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Print Height:</span> <span>${canvas.height} px</span>
+                </div>
+                <div class="summary-row">
+                    <span>Characters:</span> <span>${text.length}</span>
+                </div>
+            </div>`;
+    }
+    
+    return canvas;
+}
+
+// Handler for the Print Text button
+async function handlePrintText() {
+    const text = plainTextToPrintInput.value;
+    
+    if (!text || text.trim() === '') {
+        logger.warn('No text to print');
+        showPrintingStatus('Please enter text to print', 'error');
+        setTimeout(() => hidePrintingStatus(), 3000);
+        return;
+    }
+    
+    try {
+        if (!isPrinterConnected()) {
+            logger.warn('Printer not connected');
+            showPrintingStatus('Please connect to printer first', 'error');
+            setTimeout(() => hidePrintingStatus(), 3000);
+            return;
+        }
+        
+        showPrintingStatus('Preparing text for printing...');
+        logger.info('Starting text print job');
+        
+        // 1. Convert text to canvas (This creates the image bitmap)
+        const canvas = renderTextToCanvas(text); 
+        
+        // 2. Call the existing printImage function (which handles dithering, encoding, and BLE transfer)
+        await printImage(canvas);
+        
+        showPrintingStatus('Text printed successfully!', 'success');
+        setTimeout(() => hidePrintingStatus(), 3000);
+    } catch (err) {
+        console.error('Text Print error:', err);
+        logger.error('Print error', { message: err.message });
+        showPrintingStatus(`Error: ${err.message}`, 'error');
+        setTimeout(() => hidePrintingStatus(), 5000);
+    }
+}
+
+
 // === Initialize ===
 function init() {
-    updateDateTime();
-    setInterval(updateDateTime, 60000); // Update time every minute
-    renderItemsList();
-    updateReceiptView();
-    
-    // Add event listeners for real-time updates
-    const allReceiptInputs = document.querySelectorAll('#receiptModeContent input, #receiptModeContent textarea, #receiptModeContent select');
-    allReceiptInputs.forEach(input => {
-        input.addEventListener('input', updateReceiptView);
-    });
+    // Add listener for real-time text-to-canvas preview update
+    if (plainTextToPrintInput) {
+        plainTextToPrintInput.addEventListener('input', () => {
+            renderTextToCanvas(plainTextToPrintInput.value);
+        });
+        // Initial render if text is already present (e.g. from refresh)
+        renderTextToCanvas(plainTextToPrintInput.value || '');
+    }
     
     // Initialize logger UI
     initLoggerUI();
@@ -135,7 +229,7 @@ function setupModeToggle() {
     setActiveMode('receipt');
 }
 
-// Set the active mode (receipt or image)
+// Set the active mode (receipt/text or image)
 function setActiveMode(mode) {
     currentMode = mode;
     
@@ -149,7 +243,10 @@ function setActiveMode(mode) {
     
     // Update UI specific to the mode
     if (mode === 'receipt') {
-        updateReceiptView();
+        // Render the text preview on mode switch
+        if (plainTextToPrintInput) {
+            renderTextToCanvas(plainTextToPrintInput.value);
+        }
     } else {
         updateImagePreview();
     }
@@ -159,7 +256,7 @@ function setActiveMode(mode) {
         mode === 'receipt' ? '#3182ce' : '#c53030');
 }
 
-// Setup image mode event listeners
+// Setup image mode event listeners (Retained from original code)
 function setupImageModeListeners() {
     // Image upload
     imageUploadInput.addEventListener('change', handleImageUpload);
@@ -245,10 +342,9 @@ function setupImageModeListeners() {
     printImageBtn.addEventListener('click', printProcessedImage);
 }
 
-// === Drag and Drop Functionality ===
+// === Drag and Drop Functionality (Retained from original code) ===
 function setupDragAndDrop() {
     const dropZone = document.getElementById('dropZone');
-    const dropMessage = document.getElementById('dropMessage');
     
     // Prevent the default behavior for these events to enable dropping
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -319,7 +415,7 @@ function setupDragAndDrop() {
     }
 }
 
-// Handle image upload
+// Handle image upload (Retained from original code)
 async function handleImageUpload() {
     try {
         if (!imageUploadInput.files || !imageUploadInput.files[0]) {
@@ -348,7 +444,7 @@ async function handleImageUpload() {
     }
 }
 
-// Update the image preview
+// Update the image preview (Retained from original code)
 function updateImagePreview() {
     const canvas = imageProcessor.processImage();
     
@@ -374,7 +470,7 @@ function updateImagePreview() {
     updateImageSummary();
 }
 
-// Update the image summary panel
+// Update the image summary panel (Retained from original code)
 function updateImageSummary() {
     const summary = imageProcessor.getImageSummary();
     if (!summary) {
@@ -414,7 +510,7 @@ function updateImageSummary() {
     </div>`;
 }
 
-// Reset image settings
+// Reset image settings (Retained from original code)
 function resetImageSettings() {
     const settings = imageProcessor.resetSettings();
     
@@ -432,7 +528,7 @@ function resetImageSettings() {
     logger.info('Image settings reset to defaults');
 }
 
-// Print the processed image
+// Print the processed image (Retained from original code)
 async function printProcessedImage() {
     const canvas = imageProcessor.processImage();
     
@@ -472,7 +568,7 @@ async function printProcessedImage() {
     }
 }
 
-// === Connection and Battery Status ===
+// === Connection and Battery Status (Retained from original code) ===
 function setupConnectButtons() {
     // Add event listeners to both connect buttons
     connectReceiptBtn.addEventListener('click', handleConnectPrinter);
@@ -611,227 +707,7 @@ function updateBatteryIndicator(level) {
     logger.debug('Battery indicator updated', { level });
 }
 
-// === Item Management ===
-function addItem() {
-    const name = newItemNameInput.value.trim();
-    const price = parseFloat(newItemPriceInput.value) || 0;
-    
-    if (name) {
-        items.push({ name, price });
-        newItemNameInput.value = '';
-        newItemPriceInput.value = '';
-        newItemNameInput.focus();
-        renderItemsList();
-        updateReceiptView();
-    }
-}
-
-function deleteItem(index) {
-    items.splice(index, 1);
-    renderItemsList();
-    updateReceiptView();
-}
-
-function renderItemsList() {
-    itemsListContainer.innerHTML = '';
-    
-    items.forEach((item, index) => {
-        const itemRow = document.createElement('div');
-        itemRow.className = 'item-row';
-        
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'item-name';
-        nameSpan.textContent = item.name;
-        
-        const priceSpan = document.createElement('span');
-        priceSpan.className = 'item-price';
-        priceSpan.textContent = `$${item.price.toFixed(2)}`;
-        
-        const deleteBtn = document.createElement('span');
-        deleteBtn.className = 'item-delete';
-        deleteBtn.textContent = '×';
-        deleteBtn.onclick = () => deleteItem(index);
-        
-        itemRow.appendChild(nameSpan);
-        itemRow.appendChild(priceSpan);
-        itemRow.appendChild(deleteBtn);
-        
-        itemsListContainer.appendChild(itemRow);
-    });
-}
-
-// === Calculations ===
-function calculateTotals() {
-    // Calculate subtotal from items
-    const subtotal = items.reduce((sum, item) => sum + parseFloat(item.price || 0), 0);
-    const taxRate = parseFloat(taxRateInput.value) || 0;
-    const tax = subtotal * (taxRate / 100);
-    const tip = parseFloat(tipAmountInput.value) || 0;
-    const total = subtotal + tax + tip;
-    const amountPaid = parseFloat(amountPaidInput.value) || 0;
-    const change = Math.max(0, amountPaid - total);
-    
-    // Update change display
-    changeAmountDisplay.textContent = `$${change.toFixed(2)}`;
-    
-    return { subtotal, tax, tip, total, change };
-}
-
-function updateDateTime() {
-    currentDateTime = new Date().toLocaleString();
-    dateTimeField.textContent = currentDateTime;
-    updateReceiptView(); // Refresh receipt preview with new time
-}
-
-// === Receipt Management ===
-function getReceiptData() {
-    calculateTotals(); // Make sure calculations are up to date
-    
-    return {
-        businessName: businessNameInput.value,
-        businessAddress: businessAddressInput.value,
-        businessPhone: businessPhoneInput.value,
-        tableNumber: tableNumberInput.value,
-        serverName: serverNameInput.value,
-        transactionNumber: transactionNumberInput.value,
-        taxRate: parseFloat(taxRateInput.value) || 0,
-        dateTime: currentDateTime,
-        tipAmount: parseFloat(tipAmountInput.value) || 0,
-        paymentMethod: paymentMethodSelect.value,
-        amountPaid: parseFloat(amountPaidInput.value) || 0,
-        footerMessage: footerMessageInput.value
-    };
-}
-
-function updateReceiptView() {
-    const receiptData = getReceiptData();
-    showBitmapPreview(receiptData, items);
-    updateReceiptSummary();
-}
-
-// Updated function for a preview that fits on screen
-async function showBitmapPreview(receiptData, items) {
-    const canvas = await renderReceipt(receiptData, items);
-    const previewContainer = document.getElementById('receiptPreview');
-    
-    // Clear current preview
-    previewContainer.innerHTML = '';
-    
-    // Set up canvas for display
-    canvas.style.width = '100%';  
-    canvas.style.height = 'auto';
-    canvas.style.imageRendering = 'pixelated';
-    canvas.style.display = 'block';
-    
-    previewContainer.appendChild(canvas);
-}
-
-// Create a detailed but compact receipt summary panel
-function updateReceiptSummary() {
-    const { subtotal, tax, tip, total, change } = calculateTotals();
-    const receiptData = getReceiptData();
-    
-    receiptSummary.innerHTML = `
-    <div class="summary-section">
-        <div class="summary-row">
-            <span>Items:</span> <span>${items.length}</span>
-        </div>
-        <div class="summary-row">
-            <span>Server:</span> <span>${receiptData.serverName}</span>
-        </div>
-        <div class="summary-row">
-            <span>Table:</span> <span>${receiptData.tableNumber}</span>
-        </div>
-    </div>
-    <div class="summary-section">
-        <div class="summary-row">
-            <span>Subtotal:</span> <span>$${subtotal.toFixed(2)}</span>
-        </div>
-        <div class="summary-row">
-            <span>Tax:</span> <span>$${tax.toFixed(2)}</span>
-        </div>
-        <div class="summary-row">
-            <span>Tip:</span> <span>$${tip.toFixed(2)}</span>
-        </div>
-        <div class="summary-row summary-total">
-            <span>Total:</span> <span>$${total.toFixed(2)}</span>
-        </div>
-    </div>
-    <div class="summary-section">
-        <div class="summary-row">
-            <span>${receiptData.paymentMethod}:</span> <span>$${receiptData.amountPaid.toFixed(2)}</span>
-        </div>
-        <div class="summary-row">
-            <span>Change:</span> <span>$${change.toFixed(2)}</span>
-        </div>
-    </div>`;
-}
-
-function resetForm() {
-    // Confirm before resetting
-    if (confirm('Reset all receipt data? This will clear all items and reset to default values.')) {
-        items = [];
-        
-        // Reset to default values
-        businessNameInput.value = 'MY RESTAURANT';
-        businessAddressInput.value = '123 MAIN STREET\nCITY, STATE 12345';
-        businessPhoneInput.value = '(555) 123-4567';
-        tableNumberInput.value = '12';
-        serverNameInput.value = 'ALICE';
-        transactionNumberInput.value = '1234';
-        taxRateInput.value = '8.25';
-        tipAmountInput.value = '0.00';
-        paymentMethodSelect.value = 'CREDIT';
-        amountPaidInput.value = '0.00';
-        footerMessageInput.value = 'THANK YOU FOR DINING WITH US\nPLEASE COME AGAIN\nWWW.MYRESTAURANT.COM';
-        
-        renderItemsList();
-        updateReceiptView();
-    }
-}
-
-// === Printing ===
-async function printReceipt() {
-    try {
-        // Check if printer is connected
-        if (!isPrinterConnected()) {
-            logger.warn('Printer not connected');
-            showPrintingStatus('Please connect to printer first', 'error');
-            setTimeout(() => hidePrintingStatus(), 3000);
-            return;
-        }
-        
-        // Show printing status
-        showPrintingStatus('Printing receipt...');
-        
-        // Log print job starting
-        logger.info('Starting new print job');
-        
-        // Get receipt data and render to canvas
-        const receiptData = getReceiptData();
-        const canvas = await renderReceipt(receiptData, items);
-        
-        logger.info('Receipt rendered', {
-            width: canvas.width,
-            height: canvas.height,
-            items: items.length
-        });
-        
-        // Print the image
-        await printImage(canvas);
-        
-        // Show success message
-        showPrintingStatus('Receipt printed successfully!', 'success');
-        setTimeout(() => hidePrintingStatus(), 3000);
-    } catch (err) {
-        console.error('Print error:', err);
-        logger.error('Print error', { message: err.message });
-        showPrintingStatus(`Error: ${err.message}`, 'error');
-        setTimeout(() => hidePrintingStatus(), 5000);
-    }
-}
-
-// === UI Feedback ===
+// === UI Feedback (Retained from original code) ===
 function showPrintingStatus(message, type = 'info') {
     // Create status bar if it doesn't exist
     let statusBar = document.querySelector('.printing-status');
@@ -863,20 +739,8 @@ function hidePrintingStatus() {
 }
 
 // === Event Listeners ===
-addItemBtn.addEventListener('click', addItem);
-newItemNameInput.addEventListener('keypress', e => {
-    if (e.key === 'Enter') {
-        addItem();
-        newItemPriceInput.focus();
-    }
-});
-newItemPriceInput.addEventListener('keypress', e => {
-    if (e.key === 'Enter') addItem();
-});
-printReceiptBtn.addEventListener('click', printReceipt);
-resetBtn.addEventListener('click', resetForm);
-amountPaidInput.addEventListener('input', calculateTotals);
-tipAmountInput.addEventListener('input', calculateTotals);
+// The old receipt listeners are removed.
+printReceiptBtn.addEventListener('click', handlePrintText);
 
 // Initialize the app
 init();
